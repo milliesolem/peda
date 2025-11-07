@@ -23,10 +23,8 @@ from subprocess import *
 import config
 import codecs
 
-import six
-from six import StringIO
-from six.moves import range
-from six.moves import input
+
+from io import StringIO
 
 # http://wiki.python.org/moin/PythonDecoratorLibrary#Memoize
 # http://stackoverflow.com/questions/8856164/class-decorator-decorating-method-in-python
@@ -192,7 +190,7 @@ class message(object):
         if not teefd:
             teefd = config.Option.get("_teefd")
 
-        if isinstance(text, six.string_types) and "\x00" not in text:
+        if isinstance(text, str) and "\x00" not in text:
             print(colorize(text, color, attrib), file=self.out)
             if teefd:
                 print(colorize(text, color, attrib), file=teefd)
@@ -291,9 +289,9 @@ def is_printable(text, printables=""):
     """
     Check if a string is printable
     """
-    if six.PY3 and isinstance(text, six.string_types):
-        text = six.b(text)
-    return set(text) - set(six.b(string.printable) + six.b(printables)) == set()
+    if isinstance(text, str):
+        text = text.encode()
+    return all(t in string.printable.encode() for t in text)
 
 def is_math_exp(str):
     """
@@ -367,14 +365,13 @@ def hex2str(hexnum, intsize=4):
     """
     Convert a number in hex format to string
     """
-    if not isinstance(hexnum, six.string_types):
-        nbits = intsize * 8
-        hexnum = "0x%x" % ((hexnum + (1 << nbits)) % (1 << nbits))
-    s = hexnum[2:]
-    if len(s) % 2 != 0:
-        s = "0" + s
-    result = codecs.decode(s, 'hex')[::-1]
-    return result
+    if isinstance(hexnum, int):
+        hexnum = hex(hexnum)[2:]
+        if len(hexnum)%2:
+            hexnum = '0' + hexnum
+    elif hexnum.startswith('0x'):
+        hexnum = hexnum[2:]
+    return bytes.fromhex(hexnum)
 
 def int2hexstr(num, intsize=4):
     """
@@ -824,28 +821,13 @@ def _to_binary_string_py3(text):
 
     Do not use directly, use to_binary_string instead.
     """
-    if isinstance(text, six.binary_type):
-        return text
-    elif isinstance(text, six.string_types):
-        return six.b(text)
-    else:
-        raise Exception('only takes string types')
+    return text.encode()
 
 
-# Select functions based on Python version
-if six.PY2:
-    decode_string_escape = _decode_string_escape_py2
-    bytes_iterator = _bytes_iterator_py2
-    bytes_chr = _bytes_chr_py2
-    to_binary_string = _to_binary_string_py2
-elif six.PY3:
-    decode_string_escape = _decode_string_escape_py3
-    bytes_iterator = _bytes_iterator_py3
-    bytes_chr = _bytes_chr_py3
-    to_binary_string = _to_binary_string_py3
-else:
-    raise Exception("Could not identify Python major version")
-
+decode_string_escape = _decode_string_escape_py3
+bytes_iterator = _bytes_iterator_py3
+bytes_chr = _bytes_chr_py3
+to_binary_string = _to_binary_string_py3
 
 def dbg_print_vars(*args):
     """Prints name and repr of each arg on a separate line"""
@@ -867,7 +849,7 @@ def string_repr(text, show_quotes=True):
 
     Optionally can show or include quotes.
     """
-    if six.PY3 and isinstance(text, six.binary_type):
+    if isinstance(text, bytes):
         # Skip leading 'b' at the beginning of repr
         output = repr(text)[1:]
     else:

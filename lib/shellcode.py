@@ -14,25 +14,16 @@ import random
 import socket
 import struct
 import traceback
-import six.moves.http_client
-from six.moves import range
+import requests
 import sys
+from bs4 import BeautifulSoup
 
 import config
 from utils import msg, error_msg
 
-if sys.version_info.major == 3:
-    from urllib.request import urlopen
-    from urllib.parse import urlencode
-    pyversion = 3
-else:
-    from urllib import urlopen
-    from urllib import urlencode
-    pyversion = 2
-
 def _make_values_bytes(dict_):
     """Make shellcode in dictionaries bytes"""
-    return {k: six.b(v) for k, v in dict_.items()}
+    return {k: v.encode() for k, v in dict_.items()}
 
 
 shellcode_x86_linux = _make_values_bytes({
@@ -310,11 +301,8 @@ class Shellcode():
             return None
         try:
             msg("Connecting to shell-storm.org...")
-            s = six.moves.http_client.HTTPConnection("shell-storm.org")
-
-            s.request("GET", "/api/?s="+str(keyword))
-            res = s.getresponse()
-            read_result = res.read().decode('utf-8')
+            req = requests.get(f"https://shell-storm.org/api/?s={keyword}")
+            read_result = req.content.decode('utf-8')
             data_l = [x for x in read_result.split('\n') if x]  # remove empty results
         except Exception as e:
             if config.Option.get("debug") == "on":
@@ -345,40 +333,23 @@ class Shellcode():
     def display(self, shellcodeId):
         if shellcodeId is None:
             return None
-
+        
+        msg("Connecting to shell-storm.org...")
         try:
-            msg("Connecting to shell-storm.org...")
-            s = six.moves.http_client.HTTPConnection("shell-storm.org")
-        except:
+            req = requests.get(f"https://shell-storm.org/shellcode/files/shellcode-{shellcodeId}.html")
+        except Exception:
             error_msg("Cannot connect to shell-storm.org")
             return None
 
         try:
-            s.request("GET", "/shellcode/files/shellcode-"+str(shellcodeId)+".php")
-            res = s.getresponse()
-            data = res.read().decode('utf-8').split("<pre>")[1].split("<body>")[0]
-        except:
-            error_msg("Failed to download shellcode from shell-storm.org")
+            html = req.content.decode()
+            soup = BeautifulSoup(html)
+            data = soup.find('per').contents[0]
+        except Exception:
+            error_msg("Failed to parse HTML response from shell-storm.org")
             return None
-
-        data = data.replace("&quot;", "\"")
-        data = data.replace("&amp;", "&")
-        data = data.replace("&lt;", "<")
-        data = data.replace("&gt;", ">")
         return data
     #OWASP ZSC API Z3r0D4y.Com
     def zsc(self,os,job,encode):
-        try:
-            msg('Connection to OWASP ZSC API api.z3r0d4y.com')
-            params = urlencode({
-                    'api_name': 'zsc', 
-                    'os': os,
-                    'job': job,
-                    'encode': encode})
-            shellcode = urlopen("http://api.z3r0d4y.com/index.py?%s\n"%(str(params))).read()
-            if pyversion == 3:
-                shellcode = str(shellcode,encoding='ascii')
-            return '\n"'+shellcode.replace('\n','')+'"\n'
-        except:
-            error_msg("Error while connecting to api.z3r0d4y.com ...")
-            return None
+        error_msg("ZSC API bindings is depricated!")
+        return None
